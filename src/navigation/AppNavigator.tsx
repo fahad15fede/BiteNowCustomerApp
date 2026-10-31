@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
@@ -7,24 +9,35 @@ import CheckoutScreen from "../screens/CheckoutScreen";
 import LoginScreen from "../screens/LoginScreen";
 import RegisterScreen from "../screens/RegisterScreen";
 
-import { useAppSelector } from "../store/hooks";
-import { selectIsLoggedIn } from "../store/authSlice";
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import { restoreSession, selectIsLoggedIn, selectIsRestoring } from "../store/authSlice";
 import { RootStackParamList } from "./types";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const theme = {
   ...DefaultTheme,
-  colors: {
-    ...DefaultTheme.colors,
-    primary: "#FF5A5F",
-    background: "#FFFFFF",
-  },
+  colors: { ...DefaultTheme.colors, primary: "#FF5A5F", background: "#FFFFFF" },
 };
 
 export default function AppNavigator() {
-  // The ONE question that decides which pages exist
+  const dispatch = useAppDispatch();
   const isLoggedIn = useAppSelector(selectIsLoggedIn);
+  const isRestoring = useAppSelector(selectIsRestoring);
+
+  // 🆕 Once, when the app opens: check for a saved login
+  useEffect(() => {
+    dispatch(restoreSession());
+  }, [dispatch]);
+
+  // 🆕 While checking, show a loader (not Login, not Home)
+  if (isRestoring) {
+    return (
+      <View style={styles.splash}>
+        <ActivityIndicator size="large" color="#FF5A5F" />
+      </View>
+    );
+  }
 
   return (
     <NavigationContainer theme={theme}>
@@ -36,26 +49,16 @@ export default function AppNavigator() {
         }}
       >
         {isLoggedIn ? (
-          // ── LOGGED IN: the app ──
           <Stack.Group>
-            <Stack.Screen
-              name="Main"
-              component={DrawerNavigator}
-              options={{ headerShown: false }}
-            />
+            <Stack.Screen name="Main" component={DrawerNavigator} options={{ headerShown: false }} />
             <Stack.Screen
               name="Restaurant"
               component={RestaurantScreen}
               options={({ route }) => ({ title: route.params.restaurant.name })}
             />
-            <Stack.Screen
-              name="Checkout"
-              component={CheckoutScreen}
-              options={{ title: "Checkout" }}
-            />
+            <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ title: "Checkout" }} />
           </Stack.Group>
         ) : (
-          // ── LOGGED OUT: only login and register ──
           <Stack.Group screenOptions={{ headerShown: false }}>
             <Stack.Screen
               name="Login"
@@ -69,3 +72,12 @@ export default function AppNavigator() {
     </NavigationContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  splash: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+  },
+});

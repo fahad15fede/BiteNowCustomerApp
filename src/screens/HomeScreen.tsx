@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
-import { View, Text, FlatList, StyleSheet } from "react-native";
-import { useNavigation } from "@react-navigation/native";                       // 🆕
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";     // 🆕
+import { useEffect, useState } from "react";
+import { View, FlatList, RefreshControl, StyleSheet } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { RootStackParamList } from "../navigation/types";
 
@@ -10,33 +10,54 @@ import SearchBar from "../components/SearchBar";
 import CategoryChip from "../components/CategoryChip";
 import SectionTitle from "../components/SectionTitle";
 import RestaurantCard from "../components/RestaurantCard";
+import StatusView from "../components/StatusView";
 
 import { categories } from "../data/categories";
-import { restaurants } from "../data/restaurants";
+import { getRestaurants } from "../services/restaurantService";
+import { useFetch } from "../hooks/useFetch";
+import { useDebounce } from "../hooks/useDebounce";
 import { useAppSelector } from "../store/hooks";
 import { selectUser } from "../store/authSlice";
-import { filterRestaurants } from "../utils/filterRestaurants";
 
-// 🆕 HomeScreen is a TAB, but it opens a page in the ROOT STACK (Restaurant).
-//    So we type its navigation as the root stack's navigation.
 type RootNavigation = NativeStackNavigationProp<RootStackParamList>;
 
-export default function HomeScreen() {                                          
-  const navigation = useNavigation<RootNavigation>();                          
+export default function HomeScreen() {
+  const navigation = useNavigation<RootNavigation>();
   const user = useAppSelector(selectUser);
 
-  // 1. What the user typed and which chip is selected (null = none)
+  // 1. What the user typed / tapped
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
-  // 2. Work out the visible list (only recalculated when search/category changes)
-  const visibleRestaurants = useMemo(
-    () => filterRestaurants(restaurants, search, selectedCategory),
-    [search, selectedCategory]
+  // 2. Typed text wins; otherwise the chip is the search. Wait for typing to pause.
+  const query = useDebounce(search.trim() || selectedCategory || "", 400);
+
+  // 3. Ask the SERVER (again whenever `query` changes)
+  const { data: restaurants, loading, error, refetch } = useFetch(
+    () => getRestaurants(query),
+    [query]
   );
 
-  // Tap a chip → select it. Tap the same chip again → unselect it.
+  // Pull-to-refresh spinner: on while pulling, off when loading finishes
+  const [pulling, setPulling] = useState(false);
+  useEffect(() => {
+    if (!loading) setPulling(false);
+  }, [loading]);
+
+  const onRefresh = () => {
+    setPulling(true);
+    refetch();
+  };
+
+  // Typing clears the chip, so it's always clear what's being searched
+  const onChangeSearch = (text: string) => {
+    setSearch(text);
+    if (selectedCategory) setSelectedCategory(null);
+  };
+
+  // Tap a chip → select it (and clear typed text). Tap again → unselect.
   const toggleCategory = (name: string) => {
+    setSearch("");
     setSelectedCategory((current) => (current === name ? null : name));
   };
 
@@ -46,25 +67,40 @@ export default function HomeScreen() {
     ? "Search results"
     : "Popular Restaurants";
 
-  // 3. One list for the whole page; everything above the cards is the header
+  // 4. What to show when the list is empty: loading, error, or "nothing found"
+  const renderEmpty = () => {
+    if (loading) return <StatusView type="loading" />;
+    if (error) return <StatusView type="error" message={error} onRetry={refetch} />;
+    return (
+      <StatusView
+        type="empty"
+        title="No restaurants found"
+        message="Try another search or category."
+      />
+    );
+  };
+
   return (
     <FlatList
       style={styles.container}
       contentContainerStyle={styles.content}
-      data={visibleRestaurants}
+      data={restaurants ?? []}
       keyExtractor={(item) => item.id}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
+      refreshControl={
+        <RefreshControl refreshing={pulling} onRefresh={onRefresh} tintColor="#FF5A5F" />
+      }
       ListHeaderComponent={
         <View>
           {user ? (
-              <HomeHeader user={user} subtitle="What would you like to eat today?" />
-            ) : null}
+            <HomeHeader user={user} subtitle="What would you like to eat today?" />
+          ) : null}
 
           <SearchBar
             placeholder="Search restaurants or food..."
             value={search}
-            onChangeText={setSearch}
+            onChangeText={onChangeSearch}
           />
 
           <SectionTitle title="Categories" />
@@ -89,48 +125,20 @@ export default function HomeScreen() {
         </View>
       }
       renderItem={({ item }) => (
-        <RestaurantCard
-          restaurant={item}
-          onPress={() => navigation.navigate("Restaurant", { restaurant: item })}
-        />
-      )}
-      ListEmptyComponent={
-        <View style={styles.empty}>
-          <Text style={styles.emptyIcon}>🔍</Text>
-          <Text style={styles.emptyTitle}>No restaurants found</Text>
-          <Text style={styles.emptyText}>Try another search or category.</Text>
+        <View style={loading && styles.stale}>
+          <RestaurantCard
+            restaurant={item}
+            onPress={() => navigation.navigate("Restaurant", { restaurant: item })}
+          />
         </View>
-      }
+      )}
+      ListEmptyComponent={renderEmpty}
     />
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 30,   // 🆕 smaller: the tab bar now takes care of the bottom space
-  },
-  empty: {
-    alignItems: "center",
-    paddingVertical: 40,
-  },
-  emptyIcon: {
-    fontSize: 48,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#222",
-    marginTop: 12,
-  },
-  emptyText: {
-    fontSize: 15,
-    color: "#777",
-    marginTop: 6,
-  },
+  container: { flex: 1, backgroundColor: "#FFFFFF" },
+  content: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 30 },
+  stale: { opacity: 0.5 }, // old results fade while new ones load
 });

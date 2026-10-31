@@ -1,4 +1,4 @@
-import { View, Text, Image, FlatList, Pressable, StyleSheet } from "react-native";
+import { View, Text, FlatList, Pressable, StyleSheet } from "react-native";
 import { useNavigation, CompositeNavigationProp } from "@react-navigation/native";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -14,6 +14,9 @@ import {
   selectCartCount,
   selectCartTotal,
 } from "../store/cartSlice";
+
+import { formatPrice } from "../utils/format";
+import FoodImage from "../components/FoodImage";
 
 // ─────────────────────────────────────────────
 // Navigation type: Cart is a TAB, but it also opens Checkout (a ROOT STACK page).
@@ -38,13 +41,13 @@ function CartItemRow({ cartItem, onIncrease, onDecrease }: RowProps) {
 
   return (
     <View style={styles.row}>
-      <Image source={{ uri: item.image }} style={styles.image} />
+      <FoodImage uri={item.imageUrl} style={styles.image} />
 
       <View style={styles.rowInfo}>
         <Text style={styles.name} numberOfLines={1}>
           {item.name}
         </Text>
-        <Text style={styles.unitPrice}>${item.price.toFixed(2)} each</Text>
+        <Text style={styles.unitPrice}>{formatPrice(item.price)} each</Text>
 
         {/* − quantity + */}
         <View style={styles.stepper}>
@@ -62,7 +65,7 @@ function CartItemRow({ cartItem, onIncrease, onDecrease }: RowProps) {
         </View>
       </View>
 
-      <Text style={styles.lineTotal}>${(item.price * quantity).toFixed(2)}</Text>
+      <Text style={styles.lineTotal}>{formatPrice(item.price * quantity)}</Text>
     </View>
   );
 }
@@ -127,13 +130,13 @@ export default function CartScreen() {
 
             <View style={styles.billRow}>
               <Text style={styles.billLabel}>Subtotal</Text>
-              <Text style={styles.billValue}>${subtotal.toFixed(2)}</Text>
+              <Text style={styles.billValue}>{formatPrice(subtotal)}</Text>
             </View>
 
             <View style={styles.billRow}>
               <Text style={styles.billLabel}>Delivery fee</Text>
               <Text style={[styles.billValue, styles.free]}>
-                {deliveryFee === 0 ? "Free" : `$${deliveryFee.toFixed(2)}`}
+                {deliveryFee === 0 ? "Free" : formatPrice(deliveryFee)}
               </Text>
             </View>
 
@@ -141,7 +144,7 @@ export default function CartScreen() {
 
             <View style={styles.billRow}>
               <Text style={styles.billTotalLabel}>Total</Text>
-              <Text style={styles.billTotalValue}>${total.toFixed(2)}</Text>
+              <Text style={styles.billTotalValue}>${formatPrice(total)}</Text>
             </View>
           </View>
         }
@@ -151,7 +154,7 @@ export default function CartScreen() {
       <View style={styles.bottomBar}>
         <View>
           <Text style={styles.bottomLabel}>Total</Text>
-          <Text style={styles.bottomTotal}>${total.toFixed(2)}</Text>
+          <Text style={styles.bottomTotal}>${formatPrice(total)}</Text>
         </View>
         <Pressable style={styles.checkoutButton} onPress={() => navigation.navigate("Checkout")}>
           <Text style={styles.checkoutText}>Checkout</Text>

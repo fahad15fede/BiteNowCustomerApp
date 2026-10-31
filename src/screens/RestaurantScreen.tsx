@@ -1,34 +1,53 @@
 import { useMemo } from "react";
 import { View, Text, Image, SectionList, Pressable, StyleSheet } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { Ionicons } from "@expo/vector-icons";
 
 import { RootStackParamList } from "../navigation/types";
-import { getMenuForRestaurant, groupMenuByCategory } from "../data/menu";
 import MenuItemCard from "../components/MenuItemCard";
-import { useAppDispatch, useAppSelector } from "../store/hooks";
-import { addItem, selectCartCount, selectCartTotal } from "../store/cartSlice"; // 🆕 selectCartTotal
+import StatusView from "../components/StatusView";
 
-// Restaurant lives directly in the ROOT STACK, so stack props are correct here
+import { getMenu } from "../services/restaurantService";
+import { useFetch } from "../hooks/useFetch";
+import { groupMenuByCategory } from "../utils/menu";
+import { formatDeliveryFee, formatDeliveryTime, formatPrice } from "../utils/format";
+
+import { useAppDispatch, useAppSelector } from "../store/hooks";
+import { addItem, selectCartCount, selectCartTotal } from "../store/cartSlice";
+
 type Props = NativeStackScreenProps<RootStackParamList, "Restaurant">;
 
 export default function RestaurantScreen({ route, navigation }: Props) {
+  // The restaurant came from Home → show its info instantly, no need to load it again
   const { restaurant } = route.params;
 
   const dispatch = useAppDispatch();
   const cartCount = useAppSelector(selectCartCount);
-  const cartTotal = useAppSelector(selectCartTotal); // 🆕
+  const cartTotal = useAppSelector(selectCartTotal);
 
-  const sections = useMemo(
-    () => groupMenuByCategory(getMenuForRestaurant(restaurant.id)),
+  // 🆕 The menu comes from the server
+  const { data: menu, loading, error, refetch } = useFetch(
+    () => getMenu(restaurant.id),
     [restaurant.id]
   );
 
-  // 🆕 Go BACK to the tabs, and land on the Cart tab
+  const sections = useMemo(() => groupMenuByCategory(menu ?? []), [menu]);
+
   const openCart = () => {
-    navigation.popTo("Main", {
-      screen: "Tabs",
-      params: { screen: "CartTab" },
-    });
+    navigation.popTo("Main", { screen: "Tabs", params: { screen: "CartTab" } });
+  };
+
+  const renderEmpty = () => {
+    if (loading) return <StatusView type="loading" />;
+    if (error) return <StatusView type="error" message={error} onRetry={refetch} />;
+    return (
+      <StatusView
+        type="empty"
+        icon="restaurant-outline"
+        title="No dishes available"
+        message="This restaurant hasn't added anything yet."
+      />
+    );
   };
 
   return (
@@ -41,10 +60,22 @@ export default function RestaurantScreen({ route, navigation }: Props) {
         stickySectionHeadersEnabled={false}
         ListHeaderComponent={
           <View>
-            <Image source={{ uri: restaurant.image }} style={styles.cover} />
+            {/* Cover image, or a placeholder if there isn't one */}
+            {restaurant.imageUrl ? (
+              <Image source={{ uri: restaurant.imageUrl }} style={styles.cover} />
+            ) : (
+              <View style={[styles.cover, styles.coverPlaceholder]}>
+                <Ionicons name="restaurant-outline" size={48} color="#CCCCCC" />
+              </View>
+            )}
+
             <Text style={styles.title}>{restaurant.name}</Text>
             <Text style={styles.info}>
-              {restaurant.cuisine} · ⭐ {restaurant.rating} · {restaurant.deliveryTime}
+              {restaurant.cuisine} · ⭐ {restaurant.rating.toFixed(1)}
+            </Text>
+            <Text style={styles.info}>
+              {formatDeliveryTime(restaurant.deliveryTimeMin, restaurant.deliveryTimeMax)} ·{" "}
+              {formatDeliveryFee(restaurant.deliveryFee)}
             </Text>
           </View>
         }
@@ -54,17 +85,16 @@ export default function RestaurantScreen({ route, navigation }: Props) {
         renderItem={({ item }) => (
           <MenuItemCard item={item} onAdd={() => dispatch(addItem(item))} />
         )}
-        ListEmptyComponent={<Text style={styles.info}>No menu items yet.</Text>}
+        ListEmptyComponent={renderEmpty}
       />
 
       {cartCount > 0 && (
         <Pressable style={styles.cartButton} onPress={openCart}>
-          {/* 🆕 count badge · label · total */}
           <View style={styles.cartBadge}>
             <Text style={styles.cartBadgeText}>{cartCount}</Text>
           </View>
           <Text style={styles.cartButtonText}>View cart</Text>
-          <Text style={styles.cartButtonText}>${cartTotal.toFixed(2)}</Text>
+          <Text style={styles.cartButtonText}>{formatPrice(cartTotal)}</Text>
         </Pressable>
       )}
     </View>
@@ -76,11 +106,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFFFFF" },
   content: { padding: 20, paddingBottom: 110 },
   cover: { width: "100%", height: 180, borderRadius: 16 },
+  coverPlaceholder: {
+    backgroundColor: "#F3F3F3",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   title: { fontSize: 28, fontWeight: "700", marginTop: 16, color: "#222" },
   info: { fontSize: 15, color: "#777", marginTop: 4 },
   sectionTitle: { fontSize: 20, fontWeight: "700", color: "#222", marginTop: 20, marginBottom: 12 },
-
-  // 🆕 the button is now a row: [badge]  View cart  ........  $13.00
   cartButton: {
     position: "absolute",
     left: 20,

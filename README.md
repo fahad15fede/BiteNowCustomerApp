@@ -1,8 +1,8 @@
 # BiteNow
 
-BiteNow is a food-ordering app prototype built with Expo, React Native, and TypeScript. It lets a user browse sample restaurants and menus, manage a shopping cart, complete a mock checkout, and view orders created during the current app session.
+BiteNow is a food-ordering app built with Expo, React Native, and TypeScript. It lets users browse restaurants and menus, manage a shopping cart, complete a mock checkout, and view orders created during the current app session.
 
-> **Prototype status:** The app uses local sample data and an in-memory Redux store. It does not connect to a restaurant backend, persist state between app restarts, or process real payments.
+> **Prototype status:** Restaurant and menu data are loaded through the configured API. Cart and order state use an in-memory Redux store; checkout does not process real payments.
 
 ## Contents
 
@@ -14,16 +14,15 @@ BiteNow is a food-ordering app prototype built with Expo, React Native, and Type
 - [Run the app](#run-the-app)
 - [Project structure](#project-structure)
 - [How the app works](#how-the-app-works)
-- [Sample data](#sample-data)
+- [Data sources](#data-sources)
 - [Current limitations](#current-limitations)
 - [Validation](#validation)
 - [Contributing](#contributing)
 
 ## Features
 
-- Browse a sample restaurant list on the Home screen.
-- Search restaurants by restaurant name, cuisine, or menu item.
-- Filter restaurants by category.
+- Browse restaurants on the Home screen.
+- Search restaurants and filter by category through the restaurant API.
 - Open a restaurant to see its menu grouped by category.
 - Add menu items to a shared cart, increase quantities, or remove items.
 - Review a bill summary and proceed to checkout.
@@ -62,7 +61,7 @@ The root native stack contains the main drawer, Restaurant details, and Checkout
 - Expo Go on a compatible phone for quick device testing, or an emulator/simulator with the relevant platform tooling
 - A network connection to install packages and load the sample images, which are remote URLs
 
-The repository includes `package-lock.json`, so npm is the package manager used for the documented setup.
+The repository includes `package-lock.json`, so npm is the package manager used for the documented setup. Restaurant and menu browsing require a reachable, configured API.
 
 ## Getting started
 
@@ -113,14 +112,14 @@ The equivalent Expo CLI commands are `npx expo start`, `npx expo start --android
 └── src/
     ├── components/              # Reusable UI: cards, chips, search, drawer
     ├── constants/               # Shared constants (currently empty)
-    ├── data/                    # Local sample users, restaurants, menus, categories
-    ├── hooks/                    # Shared hooks (currently empty)
+    ├── data/                    # Local category data
+    ├── hooks/                    # Shared data-fetching and debounce hooks
     ├── navigation/              # Typed stack, drawer, and tab navigation
     ├── screens/                 # Home, Restaurant, Cart, Checkout, Orders, Profile
-    ├── services/                # API integration placeholder
+    ├── services/                # API client and restaurant/auth services
     ├── store/                   # Redux store, typed hooks, cart and order slices
     ├── types/                   # Shared TypeScript data types
-    └── utils/                   # Restaurant filtering helper
+    └── utils/                   # Menu grouping and formatting helpers
 ```
 
 ### Important files
@@ -135,8 +134,9 @@ The equivalent Expo CLI commands are `npx expo start`, `npx expo start --android
 | `src/store/store.ts` | Configures the Redux store with cart and order reducers |
 | `src/store/cartSlice.ts` | Cart actions and selectors |
 | `src/store/orderSlice.ts` | Order action and selector |
-| `src/data/` | Source of the app's mock content |
-| `src/services/api.ts` | Reserved for future backend integration |
+| `src/services/restaurantService.ts` | Fetches restaurants and their menus from the API |
+| `src/services/apiClient.ts` | Shared API request handling |
+| `src/data/categories.ts` | Local categories shown on Home |
 
 ## How the app works
 
@@ -152,9 +152,9 @@ The drawer and bottom tabs provide the main destinations: Home, Cart, Orders, an
 
 ### Home and restaurant browsing
 
-`HomeScreen` combines the header, search field, category chips, and restaurant list. `filterRestaurants` checks a search query against restaurant names, cuisine, and menu item names. Category selection checks the restaurant cuisine and its menu categories/names. Selecting a restaurant passes its data to `RestaurantScreen`.
+`HomeScreen` combines the header, search field, category chips, and restaurant list. It debounces the search or selected category and requests matching restaurants through `getRestaurants` in `src/services/restaurantService.ts`. Selecting a restaurant passes its data to `RestaurantScreen`.
 
-`RestaurantScreen` loads the selected restaurant's menu from local data, groups items by menu category, and dispatches cart actions when an item is added. If the cart has items, a shortcut opens the Cart tab.
+`RestaurantScreen` loads the selected restaurant's menu from the API, groups items by menu category, and dispatches cart actions when an item is added. If the cart has items, a shortcut opens the Cart tab.
 
 ### Cart and checkout
 
@@ -170,25 +170,22 @@ Orders are stored newest first in `state.orders` and displayed on the Orders tab
 
 The Redux store is configured in memory and is not backed by a database or local storage. Cart and order data therefore reset when the app process is restarted or the store is reinitialized.
 
-## Sample data
+## Data sources
 
-- `src/data/restaurants.ts`: four sample restaurants with cuisine, rating, image URL, estimated delivery time, and delivery-fee label.
-- `src/data/menu.ts`: sample menu items associated with restaurant IDs, plus helpers to filter and group menu items.
-- `src/data/categories.ts`: categories shown on Home.
-- `src/data/user.ts`: sample name and contact details shown in the Home header, drawer, and Profile.
+- Restaurant and menu data are fetched from the configured backend using `src/services/restaurantService.ts`.
+- `src/data/categories.ts` provides the categories shown on Home.
 
-Menu and restaurant images are loaded from external image URLs and require network access. Restaurant records and menu data are maintained locally in the repository.
+Restaurant and menu images are loaded from external image URLs and require network access.
 
 ## Current limitations
 
-- No backend API is currently connected; `src/services/api.ts` is a placeholder.
-- The restaurant, menu, and user information is sample data.
+- Restaurant and menu browsing depend on the backend being available and correctly configured.
 - The displayed Card option does not collect card details or charge a payment method.
 - Order confirmation is local to the running app; it is not sent to a restaurant or delivery service.
 - Delivery fees are currently treated as free in the cart and checkout totals.
 - Cart and orders are not persisted across app restarts.
 - No automated test suite is configured yet.
-- Some category choices may return no restaurants when they do not match the current sample restaurant cuisines or menu items.
+- Some category choices may return no restaurants when the backend has no matching restaurants.
 
 ## Validation
 
@@ -208,6 +205,6 @@ Linting may prompt to create an ESLint configuration if one is not already prese
 
 ## Contributing
 
-When adding a screen or navigation destination, update the corresponding route parameter types and register it in the appropriate navigator. Keep shared UI in `src/components/`, sample content in `src/data/`, app state in `src/store/`, and shared types in `src/types/`.
+When adding a screen or navigation destination, update the corresponding route parameter types and register it in the appropriate navigator. Keep shared UI in `src/components/`, local category data in `src/data/`, API integration in `src/services/`, app state in `src/store/`, and shared types in `src/types/`.
 
 Before submitting changes, run the type check and lint command above. Do not commit credentials, payment data, or other secrets.

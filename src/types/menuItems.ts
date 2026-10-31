@@ -1,9 +1,11 @@
+// Matches MenuItemOut from the backend
 export type MenuItem = {
   id: string;
-  restaurantId: string; // ← new: points to Restaurant.id
+  restaurantId: string;
   name: string;
   description: string;
-  price: number;
-  image: string;
+  price: number; // PKR
+  imageUrl: string | null;
   category: string;
+  isAvailable: boolean;
 };

@@ -1,0 +1,16 @@
+import { useEffect, useState } from "react";
+
+/**
+ * Returns `value`, but only after it has stopped changing for `delay` ms.
+ * Typing "pizza" fast → one update ("pizza"), not five (p, pi, piz…).
+ */
+export function useDebounce<T>(value: T, delay = 400): T {
+  const [debounced, setDebounced] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(timer); // value changed again → cancel the old timer
+  }, [value, delay]);
+
+  return debounced;
+}
